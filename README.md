@@ -1,2 +1,2 @@
 # nft-raffle-tickets
-This is the NFT raffle Ticket Selection
+NFT Raffle Tickets (Random Selection) Smart contract
