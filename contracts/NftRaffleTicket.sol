@@ -60,6 +60,7 @@ contract NftRaffleTicket is Ownable {
   
 ////////////////////// External Function //////////////////////
   function raffleTicketCreated(string memory raffleName, address nftContract, uint256 nftId, uint nftPrice, uint256 ticketSize, uint256 ticketPrice, uint256 min_ticketSize, address fromAddress, uint endDate) external returns(uint) {
+    require(endDate > block.timestamp, "End date should be more than current Date");
     IERC721Receiver(address(this)).onERC721Received(nftContract, _msgSender(), nftId, abi.encodePacked(nftId));
     ERC721(nftContract).safeTransferFrom(fromAddress, address(this), nftId);
     uint raffleId = random(msg.sender);
