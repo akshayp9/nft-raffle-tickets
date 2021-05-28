@@ -9,15 +9,19 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
 
 
 contract NftRaffleTicket is Ownable {
+  using Counters for Counters.Counter;
+  Counters.Counter private TicketId;
   using SafeMath for uint256; 
   using Address for address payable;
   string platformName;
 
-  constructor(string memory _platformName){
-    platformName = _platformName;
+  constructor(){
+    platformName = "NFT Raffle Platform";
+    TicketId.increment();
   }
   
   enum RaffleStatus {
@@ -54,22 +58,22 @@ contract NftRaffleTicket is Ownable {
   mapping(uint => address) ticketIdByUser;
   mapping(address => mapping(uint => uint)) participantAmount;
   
-  event RaffleTicketCreated(uint indexed raffleId, string raffleName, address nftContract, uint256 nftId, uint nftPrice, uint256 ticketSize, uint256 ticketPrice, uint256 min_ticketSize, address fromAddress, uint endDate, address winner, uint timestamp);
+  event RaffleTicketCreated(uint indexed raffleId, string raffleName, address nftContract, uint256 nftId, uint nftPrice, uint256 ticketSize, uint256 ticketPrice, uint256 min_ticketSize, address fromAddress, uint endDate, uint timestamp);
   event EnterParticipant(uint256 indexed raffleId, uint256 numberOfTickets, address userAddress, uint[] ticketId, uint timestamp);
   event WinnerSelected(uint256 indexed raffleId, address winnerAddress, uint256 ticketId, uint timestamp);
   
 ////////////////////// External Function //////////////////////
   function raffleTicketCreated(string memory raffleName, address nftContract, uint256 nftId, uint nftPrice, uint256 ticketSize, uint256 ticketPrice, uint256 min_ticketSize, address fromAddress, uint endDate) external returns(uint) {
-    require(endDate > block.timestamp, "End date should be more than current Date");
     IERC721Receiver(address(this)).onERC721Received(nftContract, _msgSender(), nftId, abi.encodePacked(nftId));
     ERC721(nftContract).safeTransferFrom(fromAddress, address(this), nftId);
-    uint raffleId = random(msg.sender);
+    uint raffleId = randomSelection(msg.sender);
     raffleUniqueId.push(raffleId);
     raffleTickets[raffleId] = Raffle(raffleId, raffleName, nftContract, nftId, nftPrice, ticketSize, ticketPrice, 0, min_ticketSize, address(0), endDate, fromAddress, RaffleStatus(0));
     raffleTicketsLength = raffleTicketsLength + 1;
-    emit RaffleTicketCreated(raffleId, raffleName, nftContract, nftId, nftPrice, ticketSize, ticketPrice, min_ticketSize, fromAddress, endDate, address(0), block.timestamp);
+    emit RaffleTicketCreated(raffleId, raffleName, nftContract, nftId, nftPrice, ticketSize, ticketPrice, min_ticketSize, fromAddress, endDate, block.timestamp);
     return raffleId;
   }
+
 
 function enterParticipant(uint256 raffleId, uint256 numberOfTickets) external payable {
     require(block.timestamp <= raffleTickets[raffleId].endDate, "Raffle competition is Over");
@@ -78,7 +82,8 @@ function enterParticipant(uint256 raffleId, uint256 numberOfTickets) external pa
     raffleParticipant[raffleId].push(_msgSender());
     participantAmount[_msgSender()][raffleId] = (participantAmount[_msgSender()][raffleId]).add(msg.value);
     for (uint256 i = 0; i < numberOfTickets; i++) {
-      uint ticketId = random(msg.sender);
+      TicketId.increment();
+      uint ticketId = TicketId.current();
       raffleTicketsById[raffleId].push(ticketId);
       raffleTicketsByParticipant[_msgSender()].push(ticketId);
       ticketIdByUser[ticketId] = _msgSender();
@@ -92,7 +97,7 @@ function winnerSelected(uint256 raffleId) external returns(address) {
     require(block.timestamp > raffleTickets[raffleId].endDate, "Raffle competition is Not Over yet");
     require(raffleTickets[raffleId].owner == msg.sender || owner() == msg.sender);
     if (raffleTickets[raffleId].participants >= raffleTickets[raffleId].min_ticketSize){
-       uint winnerTicketId = raffleTicketsById[raffleId][random(msg.sender) % raffleTicketsById[raffleId].length];
+       uint winnerTicketId = raffleTicketsById[raffleId][randomSelection(msg.sender) % raffleTicketsById[raffleId].length];
        address winner = ticketIdByUser[winnerTicketId];
        ERC721(raffleTickets[raffleId].nftContract).safeTransferFrom(address(this), winner, raffleTickets[raffleId].nftId);
        uint totalAmount = (raffleTickets[raffleId].ticketPrice).mul(raffleTickets[raffleId].participants);
@@ -177,14 +182,15 @@ function getRaffleUniqueId() public view returns(uint[] memory) {
   return raffleUniqueId;
 }
 
-function onERC721Received( address _operator, address _from, uint256 _tokenId, bytes memory _data) public pure returns(bytes4) {
+function onERC721Received( address _operator, address _from, uint256 _tokenId, bytes memory _data) public returns(bytes4) {
     return this.onERC721Received.selector;
 }
 
 ////////////////////// Internal Function //////////////////////
-function random(address userId) internal view returns(uint) {
+
+function randomSelection(address userId) internal view returns(uint) {
     uint uniqueId = uint(keccak256(abi.encodePacked(block.timestamp + block.difficulty + 
     ((uint(keccak256(abi.encodePacked(block.coinbase)))) / (block.timestamp)) + block.gaslimit + ((uint(keccak256(abi.encodePacked(userId)))) / (block.timestamp)) + block.number)));
-    return (uniqueId - ((uniqueId / 1 ether * 1 ether) * 1 ether * 1 ether));
+    return (uniqueId - ((uniqueId / 1000000000000000000) * 1000000000000000000));
 }
 }
