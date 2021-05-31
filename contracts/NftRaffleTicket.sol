@@ -50,20 +50,21 @@ contract NftRaffleTicket is Ownable {
 
   uint platformFee = 1;
   uint[] raffleUniqueId;
+  address[] whiteListNftAddress;
   uint256 public raffleTicketsLength = 0;
   mapping(uint256 => Raffle) public raffleTickets;
   mapping(uint256 => address[]) raffleParticipant;
   mapping(uint => uint[]) public raffleTicketsById;
-  mapping(address => uint[]) raffleTicketsByParticipant;
   mapping(uint => address) ticketIdByUser;
   mapping(address => mapping(uint => uint)) participantAmount;
+  mapping(uint => mapping(address => uint[])) public getTicketsByRaffleUser;
   
   event RaffleTicketCreated(uint indexed raffleId, string raffleName, address nftContract, uint256 nftId, uint nftPrice, uint256 ticketSize, uint256 ticketPrice, uint256 min_ticketSize, address fromAddress, uint endDate, uint timestamp);
-  event EnterParticipant(uint256 indexed raffleId, uint256 numberOfTickets, address userAddress, uint[] ticketId, uint timestamp);
+  event EnterParticipant(uint256 indexed raffleId, uint256 numberOfTickets, address userAddress, uint ticketId, uint timestamp);
   event WinnerSelected(uint256 indexed raffleId, address winnerAddress, uint256 ticketId, uint timestamp);
   
 ////////////////////// External Function //////////////////////
-  function raffleTicketCreated(string memory raffleName, address nftContract, uint256 nftId, uint nftPrice, uint256 ticketSize, uint256 ticketPrice, uint256 min_ticketSize, address nftOwner, uint endDate) external returns(uint) {
+function raffleTicketCreated(string memory raffleName, address nftContract, uint256 nftId, uint nftPrice, uint256 ticketSize, uint256 ticketPrice, uint256 min_ticketSize, address nftOwner, uint endDate) external returns(uint) {
     IERC721Receiver(address(this)).onERC721Received(nftContract, _msgSender(), nftId, abi.encodePacked(nftId));
     ERC721(nftContract).safeTransferFrom(nftOwner, address(this), nftId);
     TicketId.increment();
@@ -73,7 +74,7 @@ contract NftRaffleTicket is Ownable {
     raffleTicketsLength = raffleTicketsLength + 1;
     emit RaffleTicketCreated(raffleId, raffleName, nftContract, nftId, nftPrice, ticketSize, ticketPrice, min_ticketSize, nftOwner, endDate, block.timestamp);
     return raffleId;
-  }
+}
 
 
 function enterParticipant(uint256 raffleId, uint256 numberOfTickets) external payable {
@@ -86,12 +87,12 @@ function enterParticipant(uint256 raffleId, uint256 numberOfTickets) external pa
       TicketId.increment();
       uint ticketId = TicketId.current();
       raffleTicketsById[raffleId].push(ticketId);
-      raffleTicketsByParticipant[_msgSender()].push(ticketId);
+      getTicketsByRaffleUser[raffleId][_msgSender()].push(ticketId);
       ticketIdByUser[ticketId] = _msgSender();
       raffleTickets[raffleId].participants = raffleTickets[raffleId].participants + 1;
+      emit EnterParticipant(raffleId, numberOfTickets, _msgSender(), ticketId, block.timestamp);
     }
     raffleTickets[raffleId].status = RaffleStatus(1);
-    emit EnterParticipant(raffleId, numberOfTickets, _msgSender(), raffleTicketsByParticipant[_msgSender()], block.timestamp);
 }
 
 function winnerSelected(uint256 raffleId) external returns(address) {
@@ -135,6 +136,14 @@ function changePlatformFee(uint amount) external onlyOwner {
   platformFee = amount;
 }
 
+function setWhiteListNftAddress(address NftContract) public onlyOwner {
+    whiteListNftAddress.push(NftContract);
+}
+
+function removeWhiteListNftAddress(uint index) public onlyOwner {
+    whiteListNftAddress[index] = address(0);
+}
+
 ////////////////////// Withdraw Function //////////////////////
 function withdrawTokens(address _tokenAddress) public onlyOwner {
     IERC20 tokenAddress = IERC20(_tokenAddress);
@@ -151,8 +160,8 @@ function withdrawNft(address nftContract, uint nftId) public onlyOwner {
 }
 
 ////////////////////// View Function //////////////////////
-function getRaffleTicketsByUser(address userAddress) public view returns(uint[] memory){
-  return raffleTicketsByParticipant[userAddress];
+function getRaffleTicketsByRaffleUser(uint raffleId, address userAddress) public view returns(uint[] memory){
+  return getTicketsByRaffleUser[raffleId][userAddress];
 }
 
 function getRaffleTicketsByRaffle(uint id) public view returns(uint[] memory){
@@ -181,6 +190,10 @@ function getRaffle(uint id) public view returns(Raffle memory) {
 
 function getRaffleUniqueId() public view returns(uint[] memory) {
   return raffleUniqueId;
+}
+
+function getWhitelistNftAddress() public view returns(address[] memory){
+  return whiteListNftAddress;
 }
 
 function onERC721Received( address _operator, address _from, uint256 _tokenId, bytes memory _data) public returns(bytes4) {
